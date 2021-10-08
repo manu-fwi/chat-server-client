@@ -16,8 +16,19 @@
 
 # email: eallaud@gmail.com
 
+#network imports
 import socket
 import select
+
+#database imports
+import sqlite3
+from sqlite3 import Error
+
+#files imports
+import os
+
+#time imports
+import time
 
 class client:
     def __init__(self,cmds_sock,ID):
@@ -439,6 +450,55 @@ def get_local_IP():
         s.close()
     return IP
 
+#database related functions
+
+def create_database(connection, query):
+    cursor = connection.cursor()
+    try:
+        cursor.execute(query)
+        print("Database created successfully")
+    except Error as e:
+        print(f"The error '{e}' occurred")
+        return False
+    return True
+
+def execute_query(connection,query):
+    if connection is None:
+        return True
+    
+    cursor = connection.cursor()
+    try:
+        cursor.execute(query)
+        connection.commit()
+        print("Query executed successfully")
+    except Error as e:
+        print(f"The error '{e}' occurred")
+        return False
+    return True
+
+#database connection - create a new file each time and save the last one
+db_filename = "chat_server_db.sqlite"
+if os.path.isfile(db_filename):
+    print("renaming old db file to",db_filename+time.strftime("%y%m%d_%X"))
+    os.rename(db_filename,db_filename+time.strftime("%y%m%d_%X"))
+    os.remove(db_filename)
+
+#database creation
+db_connection = None
+
+try:
+    db_connection = sqlite3.connect(db_filename)
+    print("Connection to SQLite DB successful")
+except Error as e:
+    print(f"The error '{e}' occurred")
+    print("no database will be used to log the session")
+
+if not create_db(db_connection):
+    db_connection.close()
+    db_connection = None
+
+#create the db tables: clients, channels, clients_channles, messages_to_channels, messages_to_clients
+
 # create 2 sockets, one for commands from the clients (and the answer from the server)
 serversocket_cmd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 # the other one is for the messages form the server to the client (and the ACK from the client)
@@ -511,4 +571,8 @@ while True:
     #check if there are new commands ready on the controlsock commands list, if yes send the next one
     if controlsock_cmds:
         controlsock.send(controlsock_cmds.pop(0).encode('utf-8'))
+
+#make sure we close the database
+if db_connection is not None:
+    db_connection.close()
 
