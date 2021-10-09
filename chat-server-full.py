@@ -273,6 +273,7 @@ def parse(sock,msg):
                 cl.msgs_sock = sock
                 waiting_msgs_socks.remove(sock)
                 sock.send("/OK".encode('utf-8'))
+                add_to_clients_table(cl)
                 return
             else:
                 #ID not found
@@ -452,16 +453,62 @@ def get_local_IP():
 
 #database related functions
 
-def create_database(connection, query):
-    cursor = connection.cursor()
-    try:
-        cursor.execute(query)
-        print("Database created successfully")
-    except Error as e:
-        print(f"The error '{e}' occurred")
-        return False
+def create_db(connection):
+    #query to create the clients table
+    queries = ["""
+    CREATE TABLE IF NOT EXISTS clients (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_ID INT,
+      nick TEXT NOT NULL,
+      addr TEXT NOT NULL,
+      connection DATETIME,
+      deconnection DATETIME
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS channels (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      creation DATETIME,
+      deletion DATETIME,
+      creator TEXT NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS clientschannels (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      channel_id INT,
+      client_id INT,
+      FOREIGN KEY (channel_id) REFERENCES channels(id) FOREIGN KEY (client_id) REFERENCES clients(id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS msgstochannels (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      from_client INT,
+      to_channel INT,
+      message TEXT NOT NULL,
+      FOREIGN KEY (to_channel) REFERENCES channels(id) FOREIGN KEY (from_client) REFERENCES clients(id)
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS msgstoclients (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      from_client INT,
+      to_client INT,
+      message TEXT NOT NULL,
+      FOREIGN KEY (to_client) REFERENCES clients(id) FOREIGN KEY (from_client) REFERENCES clients(id)
+    );
+    """]
+    for query in queries:
+        if not execute_query(connection,query):
+            return False
     return True
 
+def add_to_clients_table(cl):
+    query="""
+    INSERT 
+    """
 def execute_query(connection,query):
     if connection is None:
         return True
@@ -481,7 +528,6 @@ db_filename = "chat_server_db.sqlite"
 if os.path.isfile(db_filename):
     print("renaming old db file to",db_filename+time.strftime("%y%m%d_%X"))
     os.rename(db_filename,db_filename+time.strftime("%y%m%d_%X"))
-    os.remove(db_filename)
 
 #database creation
 db_connection = None

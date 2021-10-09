@@ -9,7 +9,7 @@ s2.settimeout(0.1)
 
 
 # get local machine name
-host = "192.168.0.100"
+host = "192.168.8.200"
 port = int(input("port?"))
 
 # connection to hostname on the port.
