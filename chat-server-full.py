@@ -528,7 +528,7 @@ def update_client_nick_db(cl):
     execute_query(db_connection,query)
 
 def deconnect_client_db(cl):
-    query="UPDATE clients SET deconnection='"+time.strftime("%Y%m%dT%X")+"' WHERE creator_id="+str(cl.db_id)
+    query="UPDATE clients SET deconnection='"+time.strftime("%Y%m%dT%X")+"' WHERE id="+str(cl.db_id)
     execute_query(db_connection,query)
 
 def add_to_channels_table(channel,client):
@@ -546,6 +546,7 @@ def deconnect_channels_db(to_delete):
         channel = find_channel(ch)
         query="UPDATE channels SET deconnection='"+time.strftime("%Y%m%dT%X")+"' WHERE id="+str(channel.db_id)
         execute_query(db_connection,query)
+
 def execute_query(connection,query):
     if connection is None:
         return True
