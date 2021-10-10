@@ -206,6 +206,7 @@ def set_nick(sock,nick):
         msg = "/changed "+clients[sock].nick+" "+nick
     clients[sock].nick=nick
     broadcast(msg)
+    update_client_nick(clients[sock])
 
 def new_channel(chan):
     print("new channel created",chan)
@@ -515,6 +516,10 @@ def add_to_clients_table(cl):
     else:
         nick = cl.nick
     query+=" ("+str(cl.ID)+",'"+nick+"','"+cl.addr[0]+"','"+time.strftime("%Y%m%dT%X")+"','');"
+    execute_query(db_connection,query)
+
+def update_client_nick(cl):
+    query="UPDATE clients SET nick='"+cl.nick+"' WHERE client_id="+str(cl.ID)
     execute_query(db_connection,query)
     
 def execute_query(connection,query):
