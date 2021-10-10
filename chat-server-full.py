@@ -170,7 +170,7 @@ def deconnect_client(sock):
     #check if a channel is now empty, in that case send a delete message
     if sock in clients:
         print("Client (ID",clients[sock].ID,") at",clients[sock].addr, "is now deconnected!")
-
+        deconnect_client_db(clients[sock])
         delete_client_from_channels(clients[sock])
         #Here remember to clean the dictionaries
         nick = clients[sock].nick
@@ -206,7 +206,7 @@ def set_nick(sock,nick):
         msg = "/changed "+clients[sock].nick+" "+nick
     clients[sock].nick=nick
     broadcast(msg)
-    update_client_nick(clients[sock])
+    update_client_nick_db(clients[sock])
 
 def new_channel(chan):
     print("new channel created",chan)
@@ -518,10 +518,14 @@ def add_to_clients_table(cl):
     query+=" ("+str(cl.ID)+",'"+nick+"','"+cl.addr[0]+"','"+time.strftime("%Y%m%dT%X")+"','');"
     execute_query(db_connection,query)
 
-def update_client_nick(cl):
+def update_client_nick_db(cl):
     query="UPDATE clients SET nick='"+cl.nick+"' WHERE client_id="+str(cl.ID)
     execute_query(db_connection,query)
-    
+
+def deconnect_client_db(cl):
+    query="UPDATE clients SET deconnection='"+time.strftime("%Y%m%dT%X")+"' WHERE client_id="+str(cl.ID)
+    execute_query(db_connection,query)
+
 def execute_query(connection,query):
     if connection is None:
         return True
