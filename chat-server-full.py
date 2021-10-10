@@ -459,10 +459,10 @@ def create_db(connection):
     CREATE TABLE IF NOT EXISTS clients (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       client_ID INT,
-      nick TEXT NOT NULL,
+      nick TEXT DEFAULT NULL,
       addr TEXT NOT NULL,
       connection DATETIME,
-      deconnection DATETIME
+      deconnection DATETIME DEFAULT NULL
     );
     """,
     """
@@ -470,7 +470,7 @@ def create_db(connection):
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       creation DATETIME,
-      deletion DATETIME,
+      deletion DATETIME DEFAULT NULL,
       creator TEXT NOT NULL
     );
     """,
@@ -507,8 +507,16 @@ def create_db(connection):
 
 def add_to_clients_table(cl):
     query="""
-    INSERT 
+    INSERT INTO clients(client_id,nick,addr,connection,deconnection)
+    VALUES
     """
+    if cl.nick is None:
+        nick = ""
+    else:
+        nick = cl.nick
+    query+=" ("+str(cl.ID)+","+nick+","+cl.addr[0]+","+time.strftime("%Y%m%dT%X")+");"
+    execute_query(connection_db,query)
+    
 def execute_query(connection,query):
     if connection is None:
         return True
@@ -517,7 +525,7 @@ def execute_query(connection,query):
     try:
         cursor.execute(query)
         connection.commit()
-        print("Query executed successfully")
+        print("Query,",query,"executed successfully")
     except Error as e:
         print(f"The error '{e}' occurred")
         return False
