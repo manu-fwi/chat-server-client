@@ -154,6 +154,8 @@ def delete_client_from_channels(client):
     to_delete=""
     for ch in channels:
         if client in ch.clients:
+            #database update
+            deconnect_channel_client_db(ch,client)
             ch.clients.remove(client)
             if not ch.still_in_use():
                 to_delete+=" "+ch.name
