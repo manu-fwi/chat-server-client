@@ -161,7 +161,6 @@ def delete_client_from_channels(client):
     print("delete client from channels",to_delete)
     if to_delete!="":
         controlsock_cmds.append("/deletechannels"+to_delete)
-        deconnect_channels_db(to_delete)
         print(controlsock_cmds)
 
 def deconnect_client(sock):
@@ -321,6 +320,7 @@ def parse(sock,msg):
                 if channel is None:
                     print("control socket error: channel to delete does not exist:"+ch)
                 else:
+                    deconnect_channel_db(channel)
                     channels.remove(channel)
                     print(len(channels)," channels available")
                     broadcast("/deletedchannel "+ch)
@@ -400,7 +400,7 @@ def parse(sock,msg):
                 if clients[sock] not in ch.clients:
                     sock.send(("/NOK you have not joined channel "+params[1]).encode('utf-8'))
                     return
-                if len(ch.clients)>1:
+                if ch.still_in_use():
                     #this channel wont be closed, there are other clients in it
                     ch.new_msg(clients[sock],"/parted "+params[1]+" "+clients[sock].nick,True)
 
@@ -408,9 +408,9 @@ def parse(sock,msg):
                 ch.clients.remove(clients[sock])
                 if not ch.still_in_use():
                     #delete channel
-                    broadcast("/deletedchannel "+ch.name)
-                    print("remove unused channel",ch.name)
-                    channels.remove(ch)
+                    controlsock_cmds.append("/deletechannels "+ch.name)
+                    print("will remove unused channel",ch.name)
+
 #            elif params[0]=="partall":
 #                nb = 0
 #                for ch in channels:
@@ -539,13 +539,9 @@ def add_to_channels_table(channel,client):
     query+=" ('"+channel.name+"','"+time.strftime("%Y%m%dT%X")+"','',"+str(client.db_id)+");"
     channel.db_id = execute_query_PK(db_connection,query)
     
-def deconnect_channels_db(to_delete):
-    channels_list = to_delete.split()
-
-    for ch in channels_list:
-        channel = find_channel(ch)
-        query="UPDATE channels SET deconnection='"+time.strftime("%Y%m%dT%X")+"' WHERE id="+str(channel.db_id)
-        execute_query(db_connection,query)
+def deconnect_channel_db(channel):
+    query="UPDATE channels SET deletion='"+time.strftime("%Y%m%dT%X")+"' WHERE id="+str(channel.db_id)
+    execute_query(db_connection,query)
 
 def execute_query(connection,query):
     if connection is None:
