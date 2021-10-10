@@ -514,8 +514,8 @@ def add_to_clients_table(cl):
         nick = ""
     else:
         nick = cl.nick
-    query+=" ("+str(cl.ID)+","+nick+","+cl.addr[0]+","+time.strftime("%Y%m%dT%X")+");"
-    execute_query(connection_db,query)
+    query+=" ("+str(cl.ID)+",'"+nick+"','"+cl.addr[0]+"','"+time.strftime("%Y%m%dT%X")+"','');"
+    execute_query(db_connection,query)
     
 def execute_query(connection,query):
     if connection is None:
@@ -527,7 +527,7 @@ def execute_query(connection,query):
         connection.commit()
         print("Query,",query,"executed successfully")
     except Error as e:
-        print(f"The error '{e}' occurred")
+        print(f"The error '{e}' occurred for query",query)
         return False
     return True
 
