@@ -235,6 +235,7 @@ def join_channel(sock,chan):
     if new:
         ch = new_channel(chan)
         channels.append(ch)
+        add_to_channels_table(ch,clients[sock])
     ch.clients.append(clients[sock])
     ch.new_msg(clients[sock],"/joined "+ch.name+" "+clients[sock].nick,True)
 
@@ -475,7 +476,8 @@ def create_db(connection):
       name TEXT NOT NULL,
       creation DATETIME,
       deletion DATETIME DEFAULT NULL,
-      creator TEXT NOT NULL
+      creator_id INT,
+      FOREIGN KEY (creator_id) REFERENCES clients(id)
     );
     """,
     """
@@ -522,19 +524,27 @@ def add_to_clients_table(cl):
     cl.db_id = execute_query_PK(db_connection,query)
 
 def update_client_nick_db(cl):
-    query="UPDATE clients SET nick='"+cl.nick+"' WHERE client_id="+str(cl.ID)
+    query="UPDATE clients SET nick='"+cl.nick+"' WHERE id="+str(cl.db_id)
     execute_query(db_connection,query)
 
 def deconnect_client_db(cl):
-    query="UPDATE clients SET deconnection='"+time.strftime("%Y%m%dT%X")+"' WHERE client_id="+str(cl.ID)
+    query="UPDATE clients SET deconnection='"+time.strftime("%Y%m%dT%X")+"' WHERE creator_id="+str(cl.db_id)
     execute_query(db_connection,query)
+
+def add_to_channels_table(channel,client):
+    query="""
+    INSERT INTO channels(name,creation,deletion,creator_id)
+    VALUES
+    """
+    query+=" ('"+channel.name+"','"+time.strftime("%Y%m%dT%X")+"','',"+str(client.db_id)+");"
+    channel.db_id = execute_query_PK(db_connection,query)
     
 def deconnect_channels_db(to_delete):
     channels_list = to_delete.split()
 
     for ch in channels_list:
         channel = find_channel(ch)
-        query="UPDATE channels SET deconnection='"+time.strftime("%Y%m%dT%X")+"' WHERE client_id="+str(channel.ID)
+        query="UPDATE channels SET deconnection='"+time.strftime("%Y%m%dT%X")+"' WHERE id="+str(channel.db_id)
         execute_query(db_connection,query)
 def execute_query(connection,query):
     if connection is None:
