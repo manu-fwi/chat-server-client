@@ -401,6 +401,9 @@ def parse(sock,msg):
                 if clients[sock] not in ch.clients:
                     sock.send(("/NOK you have not joined channel "+params[1]).encode('utf-8'))
                     return
+                #update channel <-> client relation (deletion time)
+                deconnect_channel_client_db(ch,clients[sock])
+                
                 if ch.still_in_use():
                     #this channel wont be closed, there are other clients in it
                     ch.new_msg(clients[sock],"/parted "+params[1]+" "+clients[sock].nick,True)
@@ -547,13 +550,20 @@ def add_to_channels_table(channel,client):
 def add_channel_client_db(channel,client):
     #add the channel<->client relation
     query="""
-    INSERT INTO clientschannels(channel_id,client_id,creation_time,deletion_time)
+    INSERT INTO clientschannels(channel_id,client_id,creation,deletion)
     VALUES
     """
     t = time.strftime("%Y%m%dT%X")
-    query+=" ("+str(channel.db_id)+","+str(client.db_id)+",'"+t+",'');"
+    query+=" ("+str(channel.db_id)+","+str(client.db_id)+",'"+t+"','');"
     execute_query(db_connection,query)
-    
+
+def deconnect_channel_client_db(channel,client):
+    #update the channel<->client relation deletion time
+    t = time.strftime("%Y%m%dT%X")
+    query="UPDATE clientschannels SET deletion='"
+    query+=t+"' WHERE channel_id="+str(channel.db_id)+" AND client_id="+str(client.db_id)
+    execute_query(db_connection,query)
+  
 def deconnect_channel_db(channel):
     query="UPDATE channels SET deletion='"+time.strftime("%Y%m%dT%X")+"' WHERE id="+str(channel.db_id)
     execute_query(db_connection,query)
