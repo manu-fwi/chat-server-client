@@ -39,6 +39,7 @@ class client:
         self.ID = ID
         self.nick = None
         self.msgs_sock = None
+        self.db_id=None
 
     def new_msg(self,msg):
         print("before msg list=",self.msg_list)
@@ -78,6 +79,7 @@ class channel:
     def __init__(self,name):
         self.name = name
         self.clients = []
+        self.db_id = None
 
     def new_msg(self,emitter,msg,include_emitter=False):
         for c in self.clients:
@@ -159,6 +161,7 @@ def delete_client_from_channels(client):
     print("delete client from channels",to_delete)
     if to_delete!="":
         controlsock_cmds.append("/deletechannels"+to_delete)
+        deconnect_channels_db(to_delete)
         print(controlsock_cmds)
 
 def deconnect_client(sock):
@@ -516,7 +519,7 @@ def add_to_clients_table(cl):
     else:
         nick = cl.nick
     query+=" ("+str(cl.ID)+",'"+nick+"','"+cl.addr[0]+"','"+time.strftime("%Y%m%dT%X")+"','');"
-    execute_query(db_connection,query)
+    cl.db_id = execute_query_PK(db_connection,query)
 
 def update_client_nick_db(cl):
     query="UPDATE clients SET nick='"+cl.nick+"' WHERE client_id="+str(cl.ID)
@@ -525,7 +528,14 @@ def update_client_nick_db(cl):
 def deconnect_client_db(cl):
     query="UPDATE clients SET deconnection='"+time.strftime("%Y%m%dT%X")+"' WHERE client_id="+str(cl.ID)
     execute_query(db_connection,query)
+    
+def deconnect_channels_db(to_delete):
+    channels_list = to_delete.split()
 
+    for ch in channels_list:
+        channel = find_channel(ch)
+        query="UPDATE channels SET deconnection='"+time.strftime("%Y%m%dT%X")+"' WHERE client_id="+str(channel.ID)
+        execute_query(db_connection,query)
 def execute_query(connection,query):
     if connection is None:
         return True
@@ -539,6 +549,21 @@ def execute_query(connection,query):
         print(f"The error '{e}' occurred for query",query)
         return False
     return True
+
+#execute query and return the primary key of the last row
+def execute_query_PK(connection,query):
+    if connection is None:
+        return True
+    
+    cursor = connection.cursor()
+    try:
+        cursor.execute(query)
+        connection.commit()
+        print("Query,",query,"executed successfully")
+    except Error as e:
+        print(f"The error '{e}' occurred for query",query)
+        return None
+    return cursor.lastrowid
 
 #database connection - create a new file each time and save the last one
 db_filename = "chat_server_db.sqlite"
