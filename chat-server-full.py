@@ -353,21 +353,25 @@ def parse(sock,msg):
                     if clients[sock] not in ch.clients:
                         sock.send(("/NOK you have not joined channel "+params[1]).encode('utf-8'))
                         return
-
-                    print("msg to channel",ch.name,"=",' '.join(params[2:]))
-                    ch.new_msg(clients[sock],"/received "+clients[sock].nick+" "+' '.join(params[2:]))
+                    msg_to_send = ' '.join(params[2:])
+                    print("msg to channel",ch.name,"=",msg_to_send)
+                    ch.new_msg(clients[sock],"/received "+clients[sock].nick+" "+msg_to_send)
                     sock.send("/OK".encode('utf-8'))
+                    msg_to_channel_db(clients[sock],ch,msg_to_send)
                 else:
                     found = False
-                    for s,c in clients.items():
-                        if c.nick == params[1]:
+                    for s,dest_client in clients.items():
+                        if dest_client.nick == params[1]:
                             found = True
                             break
                     if not found:
                         sock.send("/NOK unknown nickname".encode('utf-8'))
                     else:
-                        c.new_msg("/received "+clients[sock].nick+" "+" ".join(params[2:])) # send to destination
+                        msg_to_send = ' '.join(params[2:])
+                        dest_client.new_msg("/received "+clients[sock].nick+" "+msg_to_send) # send to destination
                         sock.send("/OK".encode('utf-8')) #send to origin
+                        msg_to_client_db(clients[sock],dest_client,msg_to_send)
+
             elif params[0]=="list":
                 sock.send("/OK".encode('utf-8'))
                 msg="/list"
@@ -499,8 +503,8 @@ def create_db(connection):
     """
     CREATE TABLE IF NOT EXISTS msgstochannels (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      from_client INT,
-      to_channel INT,
+      from_client_id INT,
+      to_channel_id INT,
       message TEXT NOT NULL,
       FOREIGN KEY (to_channel) REFERENCES channels(id) FOREIGN KEY (from_client) REFERENCES clients(id)
     );
@@ -508,8 +512,8 @@ def create_db(connection):
     """
     CREATE TABLE IF NOT EXISTS msgstoclients (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      from_client INT,
-      to_client INT,
+      from_client_id INT,
+      to_client_id INT,
       message TEXT NOT NULL,
       FOREIGN KEY (to_client) REFERENCES clients(id) FOREIGN KEY (from_client) REFERENCES clients(id)
     );
@@ -568,6 +572,22 @@ def deconnect_channel_client_db(channel,client):
   
 def deconnect_channel_db(channel):
     query="UPDATE channels SET deletion='"+time.strftime("%Y%m%dT%X")+"' WHERE id="+str(channel.db_id)
+    execute_query(db_connection,query)
+
+def msg_to_channel_db(client,channel,msg):
+    query="""
+    INSERT INTO msgstochannels(from_client_id,to_channel_id,message)
+    VALUES
+    """
+    query+=" ("+str(client.db_id)+","+str(channel.db_id)+",'"+msg+"');"
+    execute_query(db_connection,query)
+    
+def msg_to_client_db(src_client,dest_client,msg):
+    query="""
+    INSERT INTO msgstoclients(from_client_id,to_channel_id,message)
+    VALUES
+    """
+    query+=" ("+str(src_client.db_id)+","+str(dest_client.db_id)+",'"+msg+"');"
     execute_query(db_connection,query)
 
 def execute_query(connection,query):
