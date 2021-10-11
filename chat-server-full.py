@@ -506,7 +506,7 @@ def create_db(connection):
       from_client_id INT,
       to_channel_id INT,
       message TEXT NOT NULL,
-      FOREIGN KEY (to_channel) REFERENCES channels(id) FOREIGN KEY (from_client) REFERENCES clients(id)
+      FOREIGN KEY (to_channel_id) REFERENCES channels(id) FOREIGN KEY (from_client_id) REFERENCES clients(id)
     );
     """,
     """
@@ -515,7 +515,7 @@ def create_db(connection):
       from_client_id INT,
       to_client_id INT,
       message TEXT NOT NULL,
-      FOREIGN KEY (to_client) REFERENCES clients(id) FOREIGN KEY (from_client) REFERENCES clients(id)
+      FOREIGN KEY (to_client_id) REFERENCES clients(id) FOREIGN KEY (from_client_id) REFERENCES clients(id)
     );
     """]
     for query in queries:
@@ -584,7 +584,7 @@ def msg_to_channel_db(client,channel,msg):
     
 def msg_to_client_db(src_client,dest_client,msg):
     query="""
-    INSERT INTO msgstoclients(from_client_id,to_channel_id,message)
+    INSERT INTO msgstoclients(from_client_id,to_client_id,message)
     VALUES
     """
     query+=" ("+str(src_client.db_id)+","+str(dest_client.db_id)+",'"+msg+"');"
