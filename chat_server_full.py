@@ -21,14 +21,15 @@ import socket
 import select
 
 #database imports
-import sqlite3
-from sqlite3 import Error
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from db_base import Base
 
 #files imports
 import os
 
 #time imports
-import time
+import time,datetime
 
 class client:
     def __init__(self,cmds_sock,ID):
@@ -468,112 +469,61 @@ def get_local_IP():
 
 #database related functions
 
-def create_db(connection):
-    #query to create the clients table
-    queries = ["""
-    CREATE TABLE IF NOT EXISTS clients (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_ID INT,
-      nick TEXT DEFAULT NULL,
-      addr TEXT NOT NULL,
-      connection DATETIME,
-      deconnection DATETIME DEFAULT NULL
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS channels (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      creation DATETIME,
-      deletion DATETIME DEFAULT NULL,
-      creator_id INT,
-      FOREIGN KEY (creator_id) REFERENCES clients(id)
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS clientschannels (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      channel_id INT,
-      client_id INT,
-      creation DATETIME,
-      deletion DATETIME,
-      FOREIGN KEY (channel_id) REFERENCES channels(id) FOREIGN KEY (client_id) REFERENCES clients(id)
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS msgstochannels (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      from_client_id INT,
-      to_channel_id INT,
-      message TEXT NOT NULL,
-      FOREIGN KEY (to_channel_id) REFERENCES channels(id) FOREIGN KEY (from_client_id) REFERENCES clients(id)
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS msgstoclients (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      from_client_id INT,
-      to_client_id INT,
-      message TEXT NOT NULL,
-      FOREIGN KEY (to_client_id) REFERENCES clients(id) FOREIGN KEY (from_client_id) REFERENCES clients(id)
-    );
-    """]
-    for query in queries:
-        if not execute_query(connection,query):
-            return False
-    return True
-
 def add_to_clients_table(cl):
-    query="""
-    INSERT INTO clients(client_id,nick,addr,connection,deconnection)
-    VALUES
-    """
     if cl.nick is None:
         nick = ""
     else:
         nick = cl.nick
-    query+=" ("+str(cl.ID)+",'"+nick+"','"+cl.addr[0]+"','"+time.strftime("%Y%m%dT%X")+"','');"
-    cl.db_id = execute_query_PK(db_connection,query)
+
+    #add new client to the database and set the cl.db_id to the primary key
+    with Session() as session:
+        db_cl = db_client(nickname=cl.nick,address=cl.addr,connection=datetime.utcnow())
+        session.add(cl)
+        session.commit()
+        #make sure we link the client in memory with the database record using the primary key
+        cl.db_id = db_cl.id
 
 def update_client_nick_db(cl):
-    query="UPDATE clients SET nick='"+cl.nick+"' WHERE id="+str(cl.db_id)
-    execute_query(db_connection,query)
+    with Session() as session:
+        session.execute(update(db_client).where(db_client.id==cl.db_id).values(nickname==cl.nick))
+        session.commit()
 
 def deconnect_client_db(cl):
-    query="UPDATE clients SET deconnection='"+time.strftime("%Y%m%dT%X")+"' WHERE id="+str(cl.db_id)
-    execute_query(db_connection,query)
+    with Session() as session:
+        session.execute(update(db_client).where(db_client.id==cl.db_id).values(deconnection==datetime.utcnow()))
+        session.commit()    
 
 def add_to_channels_table(channel,client):
-    #create channel in the channels table
-    query="""
-    INSERT INTO channels(name,creation,deletion,creator_id)
-    VALUES
-    """
-    t = time.strftime("%Y%m%dT%X")
-    query+=" ('"+channel.name+"','"+t+"','',"+str(client.db_id)+");"
-    channel.db_id = execute_query_PK(db_connection,query)
+    db_ch = db_channel(name = channel.name,creation = datetime.utcnow(),creator = client.db_id)
+    with Session() as session:
+        session.add(db_ch)
+        session.commit()
+        #make sure we link the channel in memory with the database record using the primary key
+        channel.db_id = db_ch.id
+
+    #add the client as a member of this new channel
+    add_channel_client_db(channel,client)
 
 def add_channel_client_db(channel,client):
     #add the channel<->client relation
-    query="""
-    INSERT INTO clientschannels(channel_id,client_id,creation,deletion)
-    VALUES
-    """
-    t = time.strftime("%Y%m%dT%X")
-    query+=" ("+str(channel.db_id)+","+str(client.db_id)+",'"+t+"','');"
-    execute_query(db_connection,query)
+    db_clch = db_clientchannel(channel_id=channel.id,client_id=client.id,creation=datetime.utcnow())
+    with Session() as session:
+        session.add(db_clch)
+        session.commit()
 
 def deconnect_channel_client_db(channel,client):
-    #update the channel<->client relation deletion time
-    t = time.strftime("%Y%m%dT%X")
-    query="UPDATE clientschannels SET deletion='"
-    query+=t+"' WHERE channel_id="+str(channel.db_id)+" AND client_id="+str(client.db_id)
-    execute_query(db_connection,query)
+    with Session() as session:
+        session.execute(update(db_clientchannel).
+                        where(channel_id==channel.db_id,
+                              client_id==client.db_id).
+                        values(deletion=datetime.utcnow()))
   
 def deconnect_channel_db(channel):
-    query="UPDATE channels SET deletion='"+time.strftime("%Y%m%dT%X")+"' WHERE id="+str(channel.db_id)
-    execute_query(db_connection,query)
-
+    with Session() as session:
+        session.execute(update(db_clientchannel).
+                        where(channel_id==channel.db_id).
+                        values(deletion=datetime.utcnow()))
+ 
 def msg_to_channel_db(client,channel,msg):
     query="""
     INSERT INTO msgstochannels(from_client_id,to_channel_id,message)
@@ -590,56 +540,24 @@ def msg_to_client_db(src_client,dest_client,msg):
     query+=" ("+str(src_client.db_id)+","+str(dest_client.db_id)+",'"+msg+"');"
     execute_query(db_connection,query)
 
-def execute_query(connection,query):
-    if connection is None:
-        return True
-    
-    cursor = connection.cursor()
-    try:
-        cursor.execute(query)
-        connection.commit()
-        print("Query,",query,"executed successfully")
-    except Error as e:
-        print(f"The error '{e}' occurred for query",query)
-        return False
-    return True
-
-#execute query and return the primary key of the last row
-def execute_query_PK(connection,query):
-    if connection is None:
-        return True
-    
-    cursor = connection.cursor()
-    try:
-        cursor.execute(query)
-        connection.commit()
-        print("Query,",query,"executed successfully")
-    except Error as e:
-        print(f"The error '{e}' occurred for query",query)
-        return None
-    return cursor.lastrowid
-
 #database connection - create a new file each time and save the last one
 db_filename = "chat_server_db.sqlite"
 if os.path.isfile(db_filename):
     print("renaming old db file to",db_filename+time.strftime("%y%m%d_%X"))
     os.rename(db_filename,db_filename+time.strftime("%y%m%d_%X"))
 
-#database creation
-db_connection = None
+#initialize db: create the engine
+engine = create_engine('sqlite:///'+db_filename, echo=True)
 
-try:
-    db_connection = sqlite3.connect(db_filename)
-    print("Connection to SQLite DB successful")
-except Error as e:
-    print(f"The error '{e}' occurred")
-    print("no database will be used to log the session")
+#import all classes from models
+from models import db_client
 
-if not create_db(db_connection):
-    db_connection.close()
-    db_connection = None
+#create tables if needed, and session maker
+Base.metadata.create_all(engine)
+Session = sessionmaker(bind=engine)
 
-#create the db tables: clients, channels, clients_channles, messages_to_channels, messages_to_clients
+print(Base, Session)
+print("database initialized!")
 
 # create 2 sockets, one for commands from the clients (and the answer from the server)
 serversocket_cmd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -713,8 +631,3 @@ while True:
     #check if there are new commands ready on the controlsock commands list, if yes send the next one
     if controlsock_cmds:
         controlsock.send(controlsock_cmds.pop(0).encode('utf-8'))
-
-#make sure we close the database
-if db_connection is not None:
-    db_connection.close()
-
