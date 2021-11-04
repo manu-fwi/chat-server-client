@@ -516,12 +516,14 @@ def deconnect_channel_client_db(channel,client):
                         where(db_clientchannel.channel_id==channel.db_id,
                               db_clientchannel.client_id==client.db_id).
                         values(deletion=datetime.utcnow()))
+        session.commit()
   
 def deconnect_channel_db(channel):
     with Session() as session:
         session.execute(update(db_clientchannel).
                         where(db_clientchannel.channel_id==channel.db_id).
                         values(deletion=datetime.utcnow()))
+        session.commit()
  
 def msg_to_channel_db(client,channel,msg):
     #add the msg to client to channel db
