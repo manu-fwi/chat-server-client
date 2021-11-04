@@ -500,9 +500,6 @@ def add_to_channels_table(channel,client):
         #make sure we link the channel in memory with the database record using the primary key
         channel.db_id = db_ch.id
 
-    #add the client as a member of this new channel
-    add_channel_client_db(channel,client)
-
 def add_channel_client_db(channel,client):
     #add the channel<->client relation
     db_clch = db_clientchannel(channel_id=channel.db_id,client_id=client.db_id,creation=datetime.utcnow())
@@ -520,8 +517,8 @@ def deconnect_channel_client_db(channel,client):
   
 def deconnect_channel_db(channel):
     with Session() as session:
-        session.execute(update(db_clientchannel).
-                        where(db_clientchannel.channel_id==channel.db_id).
+        session.execute(update(db_channel).
+                        where(db_channel.id==channel.db_id).
                         values(deletion=datetime.utcnow()))
         session.commit()
  
