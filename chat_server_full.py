@@ -21,24 +21,27 @@ import socket
 import select
 
 #database imports
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, update
 from sqlalchemy.orm import sessionmaker
 from db_base import Base
+#import all classes from models
+from models import *
 
 #files imports
 import os
 
 #time imports
-import time,datetime
+import time
+from datetime import datetime
 
 class client:
     def __init__(self,cmds_sock,ID):
         self.cmds_sock = cmds_sock
         self.waiting_ack = False
         self.msg_list = []
-        self.addr=cmds_sock.getpeername()
+        self.addr=cmds_sock.getpeername()[0]
         self.ID = ID
-        self.nick = None
+        self.nick = ""
         self.msgs_sock = None
         self.db_id=None
 
@@ -181,7 +184,7 @@ def deconnect_client(sock):
         nick = clients[sock].nick
         msgs_sock = clients[sock].msgs_sock
         del clients[sock]
-        if nick is not None:
+        if nick != "":
             broadcast("/disconnected "+nick)
 
     if sock in clients_read_list:
@@ -470,27 +473,23 @@ def get_local_IP():
 #database related functions
 
 def add_to_clients_table(cl):
-    if cl.nick is None:
-        nick = ""
-    else:
-        nick = cl.nick
 
     #add new client to the database and set the cl.db_id to the primary key
     with Session() as session:
         db_cl = db_client(nickname=cl.nick,address=cl.addr,connection=datetime.utcnow())
-        session.add(cl)
+        session.add(db_cl)
         session.commit()
         #make sure we link the client in memory with the database record using the primary key
         cl.db_id = db_cl.id
 
 def update_client_nick_db(cl):
     with Session() as session:
-        session.execute(update(db_client).where(db_client.id==cl.db_id).values(nickname==cl.nick))
+        session.execute(update(db_client).where(db_client.id==cl.db_id).values(nickname=cl.nick))
         session.commit()
 
 def deconnect_client_db(cl):
     with Session() as session:
-        session.execute(update(db_client).where(db_client.id==cl.db_id).values(deconnection==datetime.utcnow()))
+        session.execute(update(db_client).where(db_client.id==cl.db_id).values(deconnection=datetime.utcnow()))
         session.commit()    
 
 def add_to_channels_table(channel,client):
@@ -506,7 +505,7 @@ def add_to_channels_table(channel,client):
 
 def add_channel_client_db(channel,client):
     #add the channel<->client relation
-    db_clch = db_clientchannel(channel_id=channel.id,client_id=client.id,creation=datetime.utcnow())
+    db_clch = db_clientchannel(channel_id=channel.db_id,client_id=client.db_id,creation=datetime.utcnow())
     with Session() as session:
         session.add(db_clch)
         session.commit()
@@ -514,31 +513,32 @@ def add_channel_client_db(channel,client):
 def deconnect_channel_client_db(channel,client):
     with Session() as session:
         session.execute(update(db_clientchannel).
-                        where(channel_id==channel.db_id,
-                              client_id==client.db_id).
+                        where(db_clientchannel.channel_id==channel.db_id,
+                              db_clientchannel.client_id==client.db_id).
                         values(deletion=datetime.utcnow()))
   
 def deconnect_channel_db(channel):
     with Session() as session:
         session.execute(update(db_clientchannel).
-                        where(channel_id==channel.db_id).
+                        where(db_clientchannel.channel_id==channel.db_id).
                         values(deletion=datetime.utcnow()))
  
 def msg_to_channel_db(client,channel,msg):
-    query="""
-    INSERT INTO msgstochannels(from_client_id,to_channel_id,message)
-    VALUES
-    """
-    query+=" ("+str(client.db_id)+","+str(channel.db_id)+",'"+msg+"');"
-    execute_query(db_connection,query)
+    #add the msg to client to channel db
+    db_msgtoch = db_msgtochannel(channel_id=channel.db_id,client_id=client.db_id,creation=datetime.utcnow(),message = msg)
+    with Session() as session:
+        session.add(db_msgtoch)
+        session.commit() 
     
 def msg_to_client_db(src_client,dest_client,msg):
-    query="""
-    INSERT INTO msgstoclients(from_client_id,to_client_id,message)
-    VALUES
-    """
-    query+=" ("+str(src_client.db_id)+","+str(dest_client.db_id)+",'"+msg+"');"
-    execute_query(db_connection,query)
+    #add the msg to client to channel db
+    db_msgtocl = db_msgtoclient(from_client_id=src_client.db_id,
+                                to_client_id=dest_client.db_id,
+                                creation=datetime.utcnow(),
+                                message = msg)
+    with Session() as session:
+        session.add(db_msgtocl)
+        session.commit()    
 
 #database connection - create a new file each time and save the last one
 db_filename = "chat_server_db.sqlite"
@@ -548,9 +548,6 @@ if os.path.isfile(db_filename):
 
 #initialize db: create the engine
 engine = create_engine('sqlite:///'+db_filename, echo=True)
-
-#import all classes from models
-from models import db_client
 
 #create tables if needed, and session maker
 Base.metadata.create_all(engine)

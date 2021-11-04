@@ -33,7 +33,7 @@ class db_msgtochannel(Base):
 class db_client(Base):
     __tablename__ = "clients"
     id = Column(Integer, primary_key=True)
-    nickname = Column(String(64), index=True, unique=True)
+    nickname = Column(String(64), index=True)
     address = Column(String(120), index=True)
     connection = Column(DateTime())
     deconnection = Column(DateTime())
@@ -66,7 +66,7 @@ class db_msgtoclient(Base):
 class db_channel(Base):
     __tablename__ = "channels"
     id = Column(Integer, primary_key=True)
-    name = Column(String(64), index=True, unique=True)
+    name = Column(String(64), index=True)
     creator = Column(Integer,ForeignKey('clients.id'))
     creation = Column(DateTime())
     deletion = Column(DateTime())
